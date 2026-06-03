@@ -13,7 +13,7 @@ fi
 
 # Construct PYTHONPATH for the build process
 PYTHON_PACKAGES_DIR="${BUILD_DIR}/python_packages"
-PIGWEED_DIR="${DIR}/third_party/pigweed"
+PIGWEED_DIR="${BUILD_DIR}/_deps/pigweed-src"
 
 export PYTHONPATH="${PYTHON_PACKAGES_DIR}:${PIGWEED_DIR}/pw_protobuf/py:${PIGWEED_DIR}/pw_status/py:${PIGWEED_DIR}/pw_protobuf_compiler/py:${PIGWEED_DIR}/pw_rpc/py:${PIGWEED_DIR}/pw_stream/py:${PIGWEED_DIR}/pw_log/py:${PIGWEED_DIR}/pw_cli/py:${PYTHONPATH}"
 

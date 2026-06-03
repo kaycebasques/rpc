@@ -1,8 +1,12 @@
 #include "ping_service.h"
 #include "pw_log/log.h"
 #include "pw_rpc_system_server/rpc_server.h"
+#include "pw_rpc_system_server/socket.h"
 
 int main() {
+  // Set the port to 33001 to avoid conflicts.
+  pw::rpc::system_server::set_socket_port(33001);
+
   // Initialize the system server. This sets up the socket and logging.
   pw::rpc::system_server::Init();
 

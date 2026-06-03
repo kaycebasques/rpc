@@ -12,41 +12,46 @@ FetchContent_MakeAvailable(nanopb)
 
 set(dir_pw_third_party_nanopb "${nanopb_SOURCE_DIR}" CACHE PATH "" FORCE)
 
-set(PIGWEED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/pigweed")
+# 2. Declare Pigweed
+FetchContent_Declare(
+  pigweed
+  GIT_REPOSITORY https://pigweed.googlesource.com/pigweed/pigweed
+  GIT_TAG 7629bd6d570e41457a4f50bc1291840cd97c0d15
+)
 
-# 2. Include Pigweed CMake helper
-include(${PIGWEED_DIR}/pw_build/pigweed.cmake)
-
-# 3. Include backend variables
-include(${PIGWEED_DIR}/pw_log/backend.cmake)
-include(${PIGWEED_DIR}/pw_assert/backend.cmake)
-include(${PIGWEED_DIR}/pw_assert_basic/backend.cmake)
-include(${PIGWEED_DIR}/pw_sys_io/backend.cmake)
-include(${PIGWEED_DIR}/pw_sync/backend.cmake)
-include(${PIGWEED_DIR}/pw_thread/backend.cmake)
-include(${PIGWEED_DIR}/pw_chrono/backend.cmake)
-include(${PIGWEED_DIR}/pw_rpc/system_server/backend.cmake)
-
-# 4. Set Backends for host execution
-pw_set_backend(pw_log pw_log_basic)
-pw_set_backend(pw_assert.check pw_assert_basic.check_backend)
-pw_set_backend(pw_assert.assert pw_assert.print_and_abort_assert_backend)
-pw_set_backend(pw_assert_basic.handler pw_assert_basic.basic_handler)
-pw_set_backend(pw_sys_io pw_sys_io_stdio)
-pw_set_backend(pw_sync.mutex pw_sync_stl.mutex_backend)
-pw_set_backend(pw_sync.interrupt_spin_lock pw_sync_stl.interrupt_spin_lock)
-pw_set_backend(pw_chrono.system_clock pw_chrono_stl.system_clock)
-pw_set_backend(pw_thread.sleep pw_thread_stl.sleep)
-pw_set_backend(pw_thread.id pw_thread_stl.id)
-pw_set_backend(pw_thread.thread pw_thread_stl.thread)
-pw_set_backend(pw_thread.yield pw_thread_stl.yield)
-pw_set_backend(pw_rpc.system_server targets.host.system_rpc_server)
+# 3. Configure Pigweed backends.
+# We must set these backend variables in the CMake CACHE before calling
+# FetchContent_MakeAvailable(pigweed). This is because MakeAvailable automatically
+# calls add_subdirectory(), which defines Pigweed targets that depend on these
+# backends. Setting them here avoids the need to use the deprecated
+# FetchContent_Populate() pattern to retrieve the source path before adding the
+# subdirectory.
+set(pw_log_BACKEND "pw_log_basic" CACHE STRING "" FORCE)
+set(pw_assert.check_BACKEND "pw_assert_basic.check_backend" CACHE STRING "" FORCE)
+set(pw_assert.assert_BACKEND "pw_assert.print_and_abort_assert_backend" CACHE STRING "" FORCE)
+set(pw_assert_basic.handler_BACKEND "pw_assert_basic.basic_handler" CACHE STRING "" FORCE)
+set(pw_sys_io_BACKEND "pw_sys_io_stdio" CACHE STRING "" FORCE)
+set(pw_sync.mutex_BACKEND "pw_sync_stl.mutex_backend" CACHE STRING "" FORCE)
+set(pw_sync.interrupt_spin_lock_BACKEND "pw_sync_stl.interrupt_spin_lock" CACHE STRING "" FORCE)
+set(pw_chrono.system_clock_BACKEND "pw_chrono_stl.system_clock" CACHE STRING "" FORCE)
+set(pw_thread.sleep_BACKEND "pw_thread_stl.sleep" CACHE STRING "" FORCE)
+set(pw_thread.id_BACKEND "pw_thread_stl.id" CACHE STRING "" FORCE)
+set(pw_thread.thread_BACKEND "pw_thread_stl.thread" CACHE STRING "" FORCE)
+set(pw_thread.yield_BACKEND "pw_thread_stl.yield" CACHE STRING "" FORCE)
+set(pw_rpc.system_server_BACKEND "targets.host.system_rpc_server" CACHE STRING "" FORCE)
 
 # Disable experimental editions globally for Pigweed proto compiler
 set(pw_protobuf_compiler_GENERATE_PROTOS_ARGS "--no-experimental-editions" CACHE STRING "" FORCE)
 
-# 5. Add Pigweed
-add_subdirectory(${PIGWEED_DIR} pigweed)
+# 4. Make Pigweed available
+FetchContent_MakeAvailable(pigweed)
+
+# 5. Set PIGWEED_DIR for our own use
+set(PIGWEED_DIR "${pigweed_SOURCE_DIR}")
+set(ENV{PW_ROOT} "${PIGWEED_DIR}")
+
+# Include Pigweed CMake helper
+include(${PIGWEED_DIR}/pw_build/pigweed.cmake)
 
 # 6. Find protoc
 find_program(PROTOC protoc REQUIRED)
