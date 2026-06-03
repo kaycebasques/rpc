@@ -1,57 +1,53 @@
-# pw_rpc Minimal Demo (Server)
+# Prototype: RPC + CMake - bootstrap
 
-This project demonstrates a minimal setup of Pigweed's `pw_rpc` server using `nanopb` for code generation in a vanilla CMake project, without requiring the full Pigweed bootstrap for the C++ build.
+A minimal application built with CMake that sets up a `pw_rpc` server
+and uses Nanopb for protobuf codegen. The app and protobuf codegen builds
+without a Pigweed bootstrap. I use a bootstrap to spin up `pw_console` and
+verify that I can send an RPC to the app.
 
-## Prerequisites
+## Dependencies
 
-Before building, you must install the required dependencies.
-On Debian-based systems, you can use the provided script:
+On Debian-based systems, running `./install.sh` should get you
+most or everything you need. This list was generated after the
+fact so I may have missed something.
 
-```bash
-./prereqs.sh
+## Build
+
+```
+./build.sh
 ```
 
-For other systems, ensure you have:
-*   C/C++ compiler (e.g. GCC, Clang)
-*   CMake (>= 3.20)
-*   Ninja (or Make)
-*   Protobuf compiler (`protoc`)
-*   Python 3 with `protobuf` and `pyserial` libraries.
+The build script adds a bunch of Pigweed module paths to the Python
+system path. Other than that it's a normal CMake build.
 
-## Build and Run Server
+## Run
 
-1.  **Build**:
-    ```bash
-    ./build.sh
-    ```
-2.  **Run Server**:
-    ```bash
-    ./build/rpc_demo
-    ```
-    The server will start and listen on TCP port 33000.
+1. Open a console tab and run `./build/rpc_demo`.
 
-## Interacting with the Server (pw_console)
+   The app boots up and starts listening on `localhost:33000`.
 
-To interact with the running server, you can use Pigweed's `pw_console` from a bootstrapped Pigweed environment.
+2. Open another console tab, `cd` into the root of the Pigweed repo, bootstrap,
+   and then start a `pw_console` session so that you can test sending an
+   RPC to the app.
 
-1.  **Bootstrap Pigweed**:
-    Go to your Pigweed repository root (or the submodule `third_party/pigweed` in this project) and bootstrap it:
-    ```bash
-    cd third_party/pigweed
-    . ./bootstrap.sh
-    ```
-2.  **Run Console**:
-    Run the helper script `run_console.py` from this project *within* the bootstrapped terminal (it defaults to socket connection):
-    ```bash
-    python /path/to/this/project/run_console.py
-    ```
-    *Note: Replace `/path/to/this/project` with the actual absolute path to this project's root. You can still pass standard `pw_system.console` flags if needed.*
-3.  **Send RPC**:
-    In the Python REPL at the bottom of the console, you can send RPCs to the device:
-    ```python
-    device.rpcs.rpc.ping.PingService.Ping(value="Hello Pigweed RPC!")
-    ```
-    You should see the response in the console.
+   ```
+   cd third_party/pigweed
+   . bootstrap.sh
+   python3 ../../run_console.py`
+   ```
+
+   We are only using bootstrap here to simplify the prototype. In real-world
+   usage I imagine you'd have other ways to send RPCs to devices. I'm not sure
+   if it's a big lift to get `pw_console` working without a bootstrap.
+
+3. In the Python REPL of `pw_console` send an RPC to the app.
+
+   ```
+   device.rpcs.rpc.ping.PingService.Ping(value="rpc")
+   ```
+
+4. In the console tab running the app, you should see `rpc` printed to
+   `stdout`.
 
 ## Architecture
 
@@ -59,10 +55,14 @@ This demo implements only the server side of the RPC communication.
 
 ### Communication
 
-The server uses `pw_rpc::system_server` (configured with the `host` backend), which listens on a TCP socket (port 33000).
-Communication over the socket uses HDLC framing (`pw_hdlc`).
+The server uses `pw_rpc::system_server` (configured with the `host` backend),
+which listens on a TCP socket (port 33000). Communication over the socket
+uses HDLC framing (`pw_hdlc`).
 
-### Python Proto Generation
+### Proto generation
 
-To allow `pw_console` to interact with our custom `ping.proto` service, the CMake build automatically generates the standard Python protobuf module (`ping_pb2.py`) to `build/generated_python`.
-The `run_console.py` script adds this directory to `sys.path` and passes the module to `pw_system.console` which dynamically builds the RPC client at runtime.
+To allow `pw_console` to interact with our custom `ping.proto` service, the
+CMake build automatically generates the standard Python protobuf module
+(`ping_pb2.py`) to `build/generated_python`. The `run_console.py` script adds
+this directory to `sys.path` and passes the module to `pw_system.console` which
+dynamically builds the RPC client at runtime.
