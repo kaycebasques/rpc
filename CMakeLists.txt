@@ -25,6 +25,7 @@ include(${PIGWEED_DIR}/pw_sys_io/backend.cmake)
 include(${PIGWEED_DIR}/pw_sync/backend.cmake)
 include(${PIGWEED_DIR}/pw_thread/backend.cmake)
 include(${PIGWEED_DIR}/pw_chrono/backend.cmake)
+include(${PIGWEED_DIR}/pw_rpc/system_server/backend.cmake)
 
 # 4. Set Backends for host execution
 pw_set_backend(pw_log pw_log_basic)
@@ -39,12 +40,10 @@ pw_set_backend(pw_thread.sleep pw_thread_stl.sleep)
 pw_set_backend(pw_thread.id pw_thread_stl.id)
 pw_set_backend(pw_thread.thread pw_thread_stl.thread)
 pw_set_backend(pw_thread.yield pw_thread_stl.yield)
+pw_set_backend(pw_rpc.system_server targets.host.system_rpc_server)
 
 # Disable experimental editions globally for Pigweed proto compiler
 set(pw_protobuf_compiler_GENERATE_PROTOS_ARGS "--no-experimental-editions" CACHE STRING "" FORCE)
-
-# Disable pw_rpc global mutex to avoid deadlock in synchronous loopback
-add_compile_definitions(PW_RPC_USE_GLOBAL_MUTEX=0)
 
 # 5. Add Pigweed
 add_subdirectory(${PIGWEED_DIR} pigweed)
@@ -116,6 +115,9 @@ endif()
 set(GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
 file(MAKE_DIRECTORY ${GENERATED_DIR})
 
+set(GENERATED_PYTHON_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated_python")
+file(MAKE_DIRECTORY ${GENERATED_PYTHON_DIR})
+
 # Construct PYTHONPATH for Pigweed RPC plugin
 set(PW_PYTHON_PATH
   ${PYTHON_PACKAGES_DIR}
@@ -157,6 +159,23 @@ add_custom_command(
   DEPENDS ping.proto ${GENERATED_DIR}/ping.pb.h
 )
 
+# Command to generate python proto
+add_custom_command(
+  OUTPUT
+    ${GENERATED_PYTHON_DIR}/ping_pb2.py
+  COMMAND ${PROTOC}
+          --python_out=${GENERATED_PYTHON_DIR}
+          -I.
+          ping.proto
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  DEPENDS ping.proto
+)
+
+add_custom_target(generate_python_ping_protos
+  DEPENDS
+    ${GENERATED_PYTHON_DIR}/ping_pb2.py
+)
+
 # Create library for generated protos
 add_library(ping_protos STATIC
   ${GENERATED_DIR}/ping.pb.c
@@ -167,7 +186,6 @@ target_include_directories(ping_protos PUBLIC ${GENERATED_DIR})
 target_link_libraries(ping_protos
   PUBLIC
     protobuf-nanopb-static
-    pw_rpc.nanopb.client_api
     pw_rpc.nanopb.server_api
     pw_rpc.server
 )
@@ -177,8 +195,8 @@ add_executable(rpc_demo main.cc)
 target_link_libraries(rpc_demo
   PRIVATE
     ping_protos
-    pw_rpc.client
-    pw_rpc.server
+    pw_rpc.system_server
     pw_log
 )
-add_dependencies(rpc_demo generate_python_protos)
+add_dependencies(rpc_demo generate_python_protos generate_python_ping_protos)
+

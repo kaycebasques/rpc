@@ -1,6 +1,6 @@
-# pw_rpc Minimal Demo
+# pw_rpc Minimal Demo (Server)
 
-This project demonstrates a minimal setup of Pigweed's `pw_rpc` using `nanopb` for code generation in a vanilla CMake project, without requiring the full Pigweed bootstrap.
+This project demonstrates a minimal setup of Pigweed's `pw_rpc` server using `nanopb` for code generation in a vanilla CMake project, without requiring the full Pigweed bootstrap for the C++ build.
 
 ## Prerequisites
 
@@ -18,79 +18,51 @@ For other systems, ensure you have:
 *   Protobuf compiler (`protoc`)
 *   Python 3 with `protobuf` and `pyserial` libraries.
 
-## Build and Run
+## Build and Run Server
 
 1.  **Build**:
     ```bash
     ./build.sh
     ```
-2.  **Run**:
+2.  **Run Server**:
     ```bash
     ./build/rpc_demo
     ```
+    The server will start and listen on TCP port 33000.
+
+## Interacting with the Server (pw_console)
+
+To interact with the running server, you can use Pigweed's `pw_console` from a bootstrapped Pigweed environment.
+
+1.  **Bootstrap Pigweed**:
+    Go to your Pigweed repository root (or the submodule `third_party/pigweed` in this project) and bootstrap it:
+    ```bash
+    cd third_party/pigweed
+    . ./bootstrap.sh
+    ```
+2.  **Run Console**:
+    Run the helper script `run_console.py` from this project *within* the bootstrapped terminal (it defaults to socket connection):
+    ```bash
+    python /path/to/this/project/run_console.py
+    ```
+    *Note: Replace `/path/to/this/project` with the actual absolute path to this project's root. You can still pass standard `pw_system.console` flags if needed.*
+3.  **Send RPC**:
+    In the Python REPL at the bottom of the console, you can send RPCs to the device:
+    ```python
+    device.rpcs.rpc.ping.PingService.Ping(value="Hello Pigweed RPC!")
+    ```
+    You should see the response in the console.
 
 ## Architecture
 
-This demo runs entirely in a single thread, using a synchronous loopback channel to connect the `pw_rpc` Client and Server.
+This demo implements only the server side of the RPC communication.
 
-### Loopback Communication
+### Communication
 
-We implement two custom `pw::rpc::ChannelOutput` classes:
-*   `ClientToServerChannelOutput`: Intercepts packets sent by the client and forwards them directly to the server by calling `server.ProcessPacket()`.
-*   `ServerToClientChannelOutput`: Intercepts packets sent by the server (responses) and forwards them directly to the client by calling `client.ProcessPacket()`.
+The server uses `pw_rpc::system_server` (configured with the `host` backend), which listens on a TCP socket (port 33000).
+Communication over the socket uses HDLC framing (`pw_hdlc`).
 
-Because these call each other directly, the entire RPC transaction (request -> service execution -> response -> client callback) happens synchronously within the call stack of `ping_client.Ping()`.
+### Python Proto Generation
 
-```mermaid
-sequenceDiagram
-    participant Main as main()
-    participant Client as pw::rpc::Client
-    participant C2S as ClientToServerChannelOutput
-    participant Server as pw::rpc::Server
-    participant Service as PingService
-    participant S2C as ServerToClientChannelOutput
-
-    Main->>Client: ping_client.Ping(request)
-    activate Client
-    Client->>C2S: Send(packet)
-    activate C2S
-    C2S->>Server: ProcessPacket(packet)
-    activate Server
-    Server->>Service: Ping(request, response)
-    activate Service
-    Service-->>Server: return status
-    deactivate Service
-    Server->>S2C: Send(response_packet)
-    activate S2C
-    S2C->>Client: ProcessPacket(response_packet)
-    activate Client
-    Client->>Main: Trigger callback
-    Client-->>S2C: return status
-    deactivate Client
-    S2C-->>Server: return status
-    deactivate S2C
-    Server-->>C2S: return status
-    deactivate Server
-    C2S-->>Client: return status
-    deactivate C2S
-    Client-->>Main: return call object (inactive)
-    deactivate Client
-```
-
-### Threading and Locking
-
-By default, `pw_rpc` uses a global mutex to ensure thread safety. In a synchronous loopback setup on a single thread, this would lead to a deadlock:
-1.  Client locks the global mutex when starting the call.
-2.  Client calls `Send`, which calls `Server::ProcessPacket`.
-3.  Server tries to lock the same global mutex, causing a deadlock.
-
-To resolve this, we configure Pigweed with `PW_RPC_USE_GLOBAL_MUTEX=0` in `CMakeLists.txt`. This replaces the global mutex with a dummy lock, which is safe since the demo is strictly single-threaded.
-
-### Nanopb and Options
-
-*   **Nanopb Fetch**: Nanopb is integrated using CMake's `FetchContent`.
-*   **Fixed-size Strings**: By default, nanopb generates callbacks for string fields. In `ping.options`, we configure `rpc.ping.PingRequest.value` and `rpc.ping.PingResponse.value` to have a fixed max size of 64 bytes. This allows nanopb to generate them as simple `char` arrays, making them easy to read and write without implementing complex nanopb callbacks.
-
-### Python Protobuf Generation
-
-Pigweed's C++ proto compilation plugins depend on certain Python modules (like `pw_protobuf` and `pw_rpc`). In a standard Pigweed environment, these are set up during bootstrap. Without bootstrap, our CMake configuration manually generates the necessary python proto modules (via the `generate_python_protos` target) and runs the compilation commands with an adjusted `PYTHONPATH` containing these generated modules.
+To allow `pw_console` to interact with our custom `ping.proto` service, the CMake build automatically generates the standard Python protobuf module (`ping_pb2.py`) to `build/generated_python`.
+The `run_console.py` script adds this directory to `sys.path` and passes the module to `pw_system.console` which dynamically builds the RPC client at runtime.
